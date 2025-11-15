@@ -21,7 +21,11 @@ module Linguist
       return [] if blob.symlink?
       self.load()
 
-      data = blob.data[0...HEURISTICS_CONSIDER_BYTES]
+      data = if blob.respond_to?(:peek)
+        blob.peek(HEURISTICS_CONSIDER_BYTES)
+      else
+        blob.data[0...HEURISTICS_CONSIDER_BYTES]
+      end
 
       @heuristics.each do |heuristic|
         if heuristic.matches?(blob.name, candidates)
@@ -30,8 +34,13 @@ module Linguist
       end
 
       [] # No heuristics matched
-    rescue Regexp::TimeoutError
-      [] # Return nothing if we have a bad regexp which leads to a timeout enforced by Regexp.timeout in Ruby 3.2 or later
+    rescue => e
+      # Handle Regexp::TimeoutError in Ruby 3.2+ or any other errors
+      if defined?(Regexp::TimeoutError) && e.is_a?(Regexp::TimeoutError)
+        [] # Return nothing if we have a bad regexp which leads to a timeout
+      else
+        raise # Re-raise other errors
+      end
     end
 
     # Public: Get all heuristic definitions

@@ -44,6 +44,16 @@ module Linguist
       @content
     end
 
+    # Public: Peek at the first n bytes of the file.
+    #
+    # n - Number of bytes to peek
+    #
+    # Returns a String with at most n bytes.
+    def peek(n)
+      return "" if @content.nil?
+      @content[0...n]
+    end
+
     # Public: Get byte size
     #
     # Returns an Integer.

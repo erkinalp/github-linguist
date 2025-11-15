@@ -38,6 +38,18 @@ module Linguist
       @data ||= File.read(@fullpath, :encoding => "ASCII-8BIT")
     end
 
+    # Public: Peek at the first n bytes of the file.
+    #
+    # n - Number of bytes to peek
+    #
+    # Returns a String with at most n bytes.
+    def peek(n)
+      return data if @data
+      File.open(@fullpath, "rb") do |f|
+        f.read(n) || ""
+      end
+    end
+
     # Public: Get byte size
     #
     # Returns an Integer.
