@@ -71,6 +71,24 @@ module Linguist
       end
     end
 
+    # Thread-safe load using CacheFacade
+    #
+    # This method provides thread-safe loading of heuristics for multi-threaded usage.
+    # Use this instead of load() when running Linguist in a multi-threaded environment.
+    #
+    # cache_facade - Optional CacheFacade instance (default: creates new one)
+    #
+    # Returns nothing
+    def self.load_threadsafe(cache_facade = nil)
+      require 'linguist/cache_facade' unless defined?(CacheFacade)
+      cache_facade ||= CacheFacade.new
+      cache_facade.fetch(:heuristics) do
+        self.load()
+        true
+      end
+      nil
+    end
+
     def self.load_config
       YAML.load_file(File.expand_path("../heuristics.yml", __FILE__))
     end

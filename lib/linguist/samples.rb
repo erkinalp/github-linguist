@@ -22,6 +22,20 @@ module Linguist
       @cache ||= load_samples
     end
 
+    # Thread-safe cache using CacheFacade
+    #
+    # This method provides thread-safe access to samples data for multi-threaded usage.
+    # Use this instead of cache() when running Linguist in a multi-threaded environment.
+    #
+    # cache_facade - Optional CacheFacade instance (default: creates new one)
+    #
+    # Returns the cached samples data
+    def self.cache_threadsafe(cache_facade = nil)
+      require 'linguist/cache_facade' unless defined?(CacheFacade)
+      cache_facade ||= CacheFacade.new
+      cache_facade.fetch(:samples) { load_samples }
+    end
+
     # Hash of serialized samples object, uncached
     def self.load_samples
       serializer = defined?(Yajl) ? Yajl : JSON
