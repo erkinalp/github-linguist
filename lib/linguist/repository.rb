@@ -186,15 +186,22 @@ module Linguist
     # This is a fast prefilter that checks common patterns for vendored and
     # documentation files without loading the blob content.
     #
+    # Note: This uses conservative patterns to avoid rejecting paths that might
+    # have .gitattributes overrides. It only rejects very common vendored/docs
+    # directories that are unlikely to have overrides.
+    #
     # path - String path to check
     #
     # Returns true if the path should be rejected, false otherwise
     def quick_reject_path?(path)
-      # Use the same regexes as BlobHelper for consistency
-      # Downcase for case-insensitive matching of directory names
-      path_lower = path.downcase
-      return true if path_lower =~ BlobClassification::VendoredRegexp
-      return true if path_lower =~ BlobClassification::DocumentationRegexp
+      # Check common vendored directory patterns
+      return true if path =~ %r{^(vendor|node_modules|bower_components|third[_-]?party)/}i
+      
+      # Check common documentation patterns
+      return true if path =~ %r{^(docs?|documentation)/}i
+      
+      # Check common test/spec patterns that might be vendored
+      return true if path =~ %r{/(vendor|node_modules|bower_components|third[_-]?party)/}i
       
       false
     end
