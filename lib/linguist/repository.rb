@@ -1,6 +1,7 @@
 require 'linguist/lazy_blob'
 require 'linguist/source/repository'
 require 'linguist/source/rugged'
+require 'linguist/blob_classification'
 
 module Linguist
   # A Repository is an abstraction of a Grit::Repo or a basic file
@@ -11,11 +12,11 @@ module Linguist
   class Repository
     attr_reader :repository
 
-    MAX_TREE_SIZE = 100_000
+    MAX_TREE_SIZE = ENV.fetch('LINGUIST_MAX_TREE_SIZE', '100000').to_i
 
     # Public: Create a new Repository based on the stats of
     # an existing one
-    def self.incremental(repo, commit_oid, old_commit_oid, old_stats, max_tree_size = MAX_TREE_SIZE)
+    def self.incremental(repo, commit_oid, old_commit_oid, old_stats, max_tree_size = nil)
       repo = self.new(repo, commit_oid, max_tree_size)
       repo.load_existing_stats(old_commit_oid, old_stats)
       repo
@@ -27,10 +28,10 @@ module Linguist
     # repo - a Linguist::Source::Repository object
     # commit_oid - the sha1 of the commit that will be analyzed;
     #              this is usually the master branch
-    # max_tree_size - the maximum tree size to consider for analysis (default: MAX_TREE_SIZE)
+    # max_tree_size - the maximum tree size to consider for analysis (default: MAX_TREE_SIZE or LINGUIST_MAX_TREE_SIZE env var)
     #
     # Returns a Repository
-    def initialize(repo, commit_oid, max_tree_size = MAX_TREE_SIZE)
+    def initialize(repo, commit_oid, max_tree_size = nil)
       @repository = if repo.is_a? Linguist::Source::Repository
         repo
       else
@@ -38,7 +39,7 @@ module Linguist
         Linguist::Source::RuggedRepository.new(repo)
       end
       @commit_oid = commit_oid
-      @max_tree_size = max_tree_size
+      @max_tree_size = max_tree_size || MAX_TREE_SIZE
 
       @old_commit_oid = nil
       @old_stats = nil
@@ -166,6 +167,9 @@ module Linguist
           mode_format = (mode & 0170000)
           next if mode_format == 0120000 || mode_format == 040000 || mode_format == 0160000
 
+          # Quick reject paths that are likely vendored or documentation
+          next if quick_reject_path?(new)
+
           blob = Linguist::LazyBlob.new(repository, delta.new_file[:oid], new, mode.to_s(8))
 
           update_file_map(blob, file_map, new)
@@ -175,6 +179,31 @@ module Linguist
       end
 
       file_map
+    end
+
+    # Internal: Quick check if a path should be rejected before creating LazyBlob
+    #
+    # This is a fast prefilter that checks common patterns for vendored and
+    # documentation files without loading the blob content.
+    #
+    # Note: This uses conservative patterns to avoid rejecting paths that might
+    # have .gitattributes overrides. It only rejects very common vendored/docs
+    # directories that are unlikely to have overrides.
+    #
+    # path - String path to check
+    #
+    # Returns true if the path should be rejected, false otherwise
+    def quick_reject_path?(path)
+      # Check common vendored directory patterns
+      return true if path =~ %r{^(vendor|node_modules|bower_components|third[_-]?party)/}i
+      
+      # Check common documentation patterns
+      return true if path =~ %r{^(docs?|documentation)/}i
+      
+      # Check common test/spec patterns that might be vendored
+      return true if path =~ %r{/(vendor|node_modules|bower_components|third[_-]?party)/}i
+      
+      false
     end
 
     def update_file_map(blob, file_map, key)

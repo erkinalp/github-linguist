@@ -21,7 +21,11 @@ module Linguist
       return [] if blob.symlink?
       self.load()
 
-      data = blob.data[0...HEURISTICS_CONSIDER_BYTES]
+      data = if blob.respond_to?(:peek)
+        blob.peek(HEURISTICS_CONSIDER_BYTES)
+      else
+        blob.data[0...HEURISTICS_CONSIDER_BYTES]
+      end
 
       @heuristics.each do |heuristic|
         if heuristic.matches?(blob.name, candidates)
@@ -30,8 +34,13 @@ module Linguist
       end
 
       [] # No heuristics matched
-    rescue Regexp::TimeoutError
-      [] # Return nothing if we have a bad regexp which leads to a timeout enforced by Regexp.timeout in Ruby 3.2 or later
+    rescue => e
+      # Handle Regexp::TimeoutError in Ruby 3.2+ or any other errors
+      if defined?(Regexp::TimeoutError) && e.is_a?(Regexp::TimeoutError)
+        [] # Return nothing if we have a bad regexp which leads to a timeout
+      else
+        raise # Re-raise other errors
+      end
     end
 
     # Public: Get all heuristic definitions
@@ -60,6 +69,24 @@ module Linguist
         end
         @heuristics << new(exts, rules)
       end
+    end
+
+    # Thread-safe load using CacheFacade
+    #
+    # This method provides thread-safe loading of heuristics for multi-threaded usage.
+    # Use this instead of load() when running Linguist in a multi-threaded environment.
+    #
+    # cache_facade - Optional CacheFacade instance (default: creates new one)
+    #
+    # Returns nothing
+    def self.load_threadsafe(cache_facade = nil)
+      require 'linguist/cache_facade' unless defined?(CacheFacade)
+      cache_facade ||= CacheFacade.new
+      cache_facade.fetch(:heuristics) do
+        self.load()
+        true
+      end
+      nil
     end
 
     def self.load_config

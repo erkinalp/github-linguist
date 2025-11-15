@@ -97,6 +97,12 @@ module Linguist
       @size
     end
 
+    def peek(n)
+      return data if @data
+      load_blob_prefix!(n)
+      @data_prefix || ""
+    end
+
     def symlink?
       # We don't create LazyBlobs for symlinks.
       false
@@ -104,6 +110,7 @@ module Linguist
 
     def cleanup!
       @data.clear if @data
+      @data_prefix.clear if @data_prefix
     end
 
     protected
@@ -115,6 +122,19 @@ module Linguist
 
     def load_blob!
       @data, @size = repository.load_blob(oid, MAX_SIZE) if @data.nil?
+    end
+
+    def load_blob_prefix!(n)
+      return if @data_prefix
+      
+      # If we already loaded full data, use it
+      if @data
+        @data_prefix = @data[0...n]
+        return
+      end
+      
+      max_load = [n, MAX_SIZE].min
+      @data_prefix, @size = repository.load_blob(oid, max_load)
     end
   end
 end
