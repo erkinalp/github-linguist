@@ -11,7 +11,7 @@ module Linguist
   class Repository
     attr_reader :repository
 
-    MAX_TREE_SIZE = 100_000
+    MAX_TREE_SIZE = ENV.fetch('LINGUIST_MAX_TREE_SIZE', '100000').to_i
 
     # Public: Create a new Repository based on the stats of
     # an existing one
@@ -166,6 +166,9 @@ module Linguist
           mode_format = (mode & 0170000)
           next if mode_format == 0120000 || mode_format == 040000 || mode_format == 0160000
 
+          # Quick reject paths that are likely vendored or documentation
+          next if quick_reject_path?(new)
+
           blob = Linguist::LazyBlob.new(repository, delta.new_file[:oid], new, mode.to_s(8))
 
           update_file_map(blob, file_map, new)
@@ -175,6 +178,27 @@ module Linguist
       end
 
       file_map
+    end
+
+    # Internal: Quick check if a path should be rejected before creating LazyBlob
+    #
+    # This is a fast prefilter that checks common patterns for vendored and
+    # documentation files without loading the blob content.
+    #
+    # path - String path to check
+    #
+    # Returns true if the path should be rejected, false otherwise
+    def quick_reject_path?(path)
+      # Check common vendored directory patterns
+      return true if path =~ %r{^(vendor|node_modules|bower_components|third[_-]?party)/}i
+      
+      # Check common documentation patterns
+      return true if path =~ %r{^(docs?|documentation)/}i
+      
+      # Check common test/spec patterns that might be vendored
+      return true if path =~ %r{/(vendor|node_modules|bower_components|third[_-]?party)/}i
+      
+      false
     end
 
     def update_file_map(blob, file_map, key)
