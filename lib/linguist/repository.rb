@@ -1,6 +1,7 @@
 require 'linguist/lazy_blob'
 require 'linguist/source/repository'
 require 'linguist/source/rugged'
+require 'linguist/blob_classification'
 
 module Linguist
   # A Repository is an abstraction of a Grit::Repo or a basic file
@@ -11,7 +12,7 @@ module Linguist
   class Repository
     attr_reader :repository
 
-    MAX_TREE_SIZE = 100_000
+    MAX_TREE_SIZE = ENV.fetch('LINGUIST_MAX_TREE_SIZE', '100000').to_i
 
     # Public: Create a new Repository based on the stats of
     # an existing one
@@ -38,7 +39,7 @@ module Linguist
         Linguist::Source::RuggedRepository.new(repo)
       end
       @commit_oid = commit_oid
-      @max_tree_size = max_tree_size || ENV.fetch('LINGUIST_MAX_TREE_SIZE', MAX_TREE_SIZE).to_i
+      @max_tree_size = max_tree_size || MAX_TREE_SIZE
 
       @old_commit_oid = nil
       @old_stats = nil
@@ -190,8 +191,10 @@ module Linguist
     # Returns true if the path should be rejected, false otherwise
     def quick_reject_path?(path)
       # Use the same regexes as BlobHelper for consistency
-      return true if path =~ BlobClassification::VendoredRegexp
-      return true if path =~ BlobClassification::DocumentationRegexp
+      # Downcase for case-insensitive matching of directory names
+      path_lower = path.downcase
+      return true if path_lower =~ BlobClassification::VendoredRegexp
+      return true if path_lower =~ BlobClassification::DocumentationRegexp
       
       false
     end
