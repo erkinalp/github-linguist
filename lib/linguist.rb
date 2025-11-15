@@ -10,15 +10,18 @@ require 'linguist/version'
 require 'linguist/strategy/manpage'
 require 'linguist/strategy/xml'
 require 'linguist/instrumenter'
+require 'linguist/context'
 
 class << Linguist
   # Public: Detects the Language of the blob.
   #
   # blob - an object that includes the Linguist `BlobHelper` interface;
   #       see Linguist::LazyBlob and Linguist::FileBlob for examples
+  # allow_empty - allow detection of empty blobs (default: false)
+  # context - optional Linguist::Context for strategy configuration (default: Linguist::DEFAULT_CONTEXT)
   #
   # Returns Language or nil.
-  def detect(blob, allow_empty: false)
+  def detect(blob, allow_empty: false, context: Linguist::DEFAULT_CONTEXT)
     # Bail early if the blob is binary or empty.
     return nil if blob.likely_binary? || blob.binary? || (!allow_empty && blob.empty?)
 
@@ -27,7 +30,7 @@ class << Linguist
       languages = []
       returning_strategy = nil
 
-      STRATEGIES.each do |strategy|
+      context.strategies.each do |strategy|
         returning_strategy = strategy
         candidates = Linguist.instrument("linguist.strategy", :blob => blob, :strategy => strategy, :candidates => languages) do
           strategy.call(blob, languages)
